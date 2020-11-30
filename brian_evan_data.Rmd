@@ -1,0 +1,413 @@
+---
+title: "brian_evan_data"
+author: "Mark Carthon"
+date: "11/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Set working directory and load data
+```{r}
+setwd("~/NYCDSA/Machine Learning Project Proposal/Machine Learning Project Proposal")
+data = read.csv('brian_evan_data.csv')
+```
+
+# Load libraries
+```{r}
+library(glmnet)
+library(MASS)
+library(car)
+library(dplyr)
+library(jtools)
+library(caret)
+```
+
+# Log GrLivArea
+```{r}
+data$GrLivArea    = log1p(data$GrLivArea)
+```
+
+# Preprocess data
+```{r}
+data = sapply(data, as.numeric)
+data = as.data.frame(scale(data))
+```
+
+# Proportion of missing data by column
+```{r}
+sort(colMeans(is.na(data)), decreasing = T)
+```
+
+
+# Set parameter grid for lambda
+```{r}
+grid = 10^seq(from = -0.9, to = 100, length.out = 20)
+```
+
+# Form predictor and target matrices
+```{r}
+x = model.matrix(SalePrice ~ ., data = data)[, ! names(data) %in% c("SalePrice", "price_per_area")]
+y = data$SalePrice
+```
+
+# Run that lasso boi!
+```{r}
+lasso.model = glmnet(x, y, alpha = 1, lambda = grid)
+
+dim(coef(lasso.model))
+coef = as.matrix(coef(lasso.model))
+coef = as.data.frame(coef)
+
+results = sort(abs(rowMeans(coef)), decreasing = TRUE)
+results = results[results > 0]
+results = t(results)
+results = as.data.frame(results)
+```
+
+# Collect results from lasso for MLR
+```{r}
+lasso_features = subset(data,select = c("SalePrice"
+                                        ,colnames(results)[-length(colnames(results))],
+                                        "isu_dist","airport_dist","downtown_dist",
+                                        "X2ndFlrSF"))
+```
+
+# Run the MLR like a boss!
+```{r}
+model = lm(formula = SalePrice ~ . - OverallQual,
+           data = lasso_features)
+summary(model)
+plot(model)
+vif(model)
+```
+# Outlier points are: 2566, 925
+# Insignificant features:FireplaceQu
+# Remove outliers and run LMR again to see what happens
+```{r}
+lasso_features = lasso_features[-c(2566,925),]
+drop = c("OverallQual", "TotRmsAbvGrd", "LotArea", "GarageCars")
+lasso_features = lasso_features[, !names(lasso_features) %in% drop]
+
+model = lm(formula = SalePrice ~ .,
+           data = lasso_features)
+summary(model)
+plot(model)
+vif(model)
+```
+
+# Write lasso_features to csv
+```{r}
+#write.csv(lasso_features, 
+  #        file = "C:\\Users\\Mark Anthony Carthon\\Documents\\NYCDSA\\Machine Learning Project Proposal\\Machine Learning Project #Proposal\\lasso_features.csv")
+```
+
+# Run train-test-split
+```{r}
+set.seed(0)
+
+train = sample(x = nrow(lasso_features),
+               size = 0.8 * nrow(lasso_features),
+               replace = F)
+
+test = setdiff(1:nrow(lasso_features), train)
+test = sample(x = test, size = length(test), replace = F)
+```
+
+# Create matrices of predictors and labels
+```{r}
+#x_train = model.matrix(object = SalePrice ~ ., data = lasso_features[train,])
+x_train = lasso_features[train,]
+y_train = lasso_features$SalePrice[train]
+#x_test  = model.matrix(object = SalePrice ~ ., data = lasso_features[test,])
+x_test = lasso_features[test,]
+y_test = lasso_features$SalePrice[test]
+```
+
+
+## Cross Validation
+
+```{r}
+set.seed(0)
+
+train_control = trainControl(method = "repeatedcv", number  = 10, repeats = 3)
+
+cvmodel = train(SalePrice ~ ., data = x_train, trControl = train_control, method = "lm", tol = 2e-16)
+
+print(cvmodel)
+
+summary(cvmodel)
+```
+
+```{r}
+set.seed(0)
+
+drop = c("FullBath", "FireplaceQu", "TotRmsAbvGrd")
+lasso_features = lasso_features[, !names(lasso_features) %in% drop]
+
+x_train = lasso_features[train,]
+y_train = lasso_features$SalePrice[train]
+x_test = lasso_features[test,]
+y_test = lasso_features$SalePrice[test]
+
+train_control = trainControl(method = "repeatedcv", number  = 10, repeats = 3)
+
+cvmodel = train(SalePrice ~ ., data = x_train, trControl = train_control, method = "lm", tol = 2e-16)
+
+print(cvmodel)
+
+summary(cvmodel)
+```
+
+
+```{r}
+cvmodel$results
+```
+
+# Prediction
+```{r}
+predictions = predict(cvmodel, newdata = x_test, interval = "prediction")
+```
+```{r}
+
+```
+
+# Prediction Stats
+```{r}
+RMSE = sqrt(mean((predictions-y_test)^2))
+RMSE
+```
+
+```{r}
+#write.csv(x = data, 
+#file = "C:\\Users\\Mark Anthony Carthon\\Documents\\NYCDSA\\Machine Learning Project Proposal\\Machine Learning Project Proposal\\_data")
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+python_data = data.frame(data$SalePrice, data$X1stFlrSF, data$X2ndFlrSF, data$Fireplaces,
+                         data$TotalBsmtSF, data$ExterQual, data$HeatingQC, data$HalfBath,
+                         data$BsmtQual, data$GarageArea, data$GarageFinish, data$YearRemodAdd,
+                         data$KitchenQual, data$CentralAir, data$YearBuilt, data$isu_dist,
+                         data$airport_dist, data$downtown_dist, data$Neighborhood)
+```
+
+```{r}
+#python_data = sapply(python_data, as.numeric)
+#python_data = as.data.frame(python_data)
+```
+
+
+```{r}
+model = lm(data.SalePrice ~ ., data = python_data[,-19])
+summary(model)
+plot(model)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

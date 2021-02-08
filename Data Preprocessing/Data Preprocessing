@@ -1,13 +1,10 @@
 def regression_preprocessing():
-    # Loading datasets 
+    # Loading datasets and creating dummified variables for regression input
     ames_df = pd.read_csv(r'C:\Users\mmotd\OneDrive\Documents\Boot Camp Files\Machine Learning Project\Ames_Housing_Price_Data.csv')
-    # Engineered distance features
     engineered_features = pd.read_csv(r'C:\Users\mmotd\OneDrive\Documents\Boot Camp Files\Machine Learning Project\Brian_Evan_Data.csv',
                                  usecols = ['airport_dist', 'downtown_dist', 'isu_dist'])
-    # Concatenating engineered features to ames df
-    ames_df = pd.concat([ames_df,engineered_features], axis=1)
-   
-
+    # Dropping neighborhood features due to discrepancies in observation sizes leading to inaccurate coefficients
+    ames_df = ames_df.drop('Neighborhood', axis = 1)
     columns = pd.Series(ames_df.columns)
     
     # Creating a list of rows where null values means there is simply no value
@@ -15,52 +12,39 @@ def regression_preprocessing():
     null_is_none = pd.Series(['Alley', 'BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 
                     'BsmtFinType2', 'FireplaceQu', 'GarageType', 'GarageFinish', 'GarageQual', 
                     'GarageCond', 'PoolQC', 'Fence', 'MiscFeature'])
-    
     # Replacing NaN values with 'None' where the feature does not exist
-    for column in columns:
-        for g in null_is_none:
-            if g == column:
-                ames_df[column] = ames_df[column].replace(np.nan, 'None')
+    ames_df.loc[:,null_is_none] = ames_df.loc[:,null_is_none].apply(lambda x: x.replace(np.nan, 'None'))
+    
+
+    ordinals = ['LandSlope','ExterQual','ExterCond','HeatingQC','KitchenQual','FireplaceQu','GarageCond','PavedDrive',
+                'LotShape', 'BsmtQual','BsmtCond','GarageQual','PoolQC','BsmtExposure','BsmtFinType1','BsmtFinType2',
+                'CentralAir','GarageFinish','Functional','Street','Fence']
+    
+    ames_df = pd.concat([ames_df,engineered_features], axis=1)
     
     
-    
-    
-    # Generating house and remodel age features and dropping corresponding columns 
+    # Generating house and remodel age features and dropping columns that features are derived from
     ames_df['HouseAge'] = ames_df['YrSold'] - ames_df['YearBuilt']
     ames_df['RemodelAge'] = ames_df['YrSold'] - ames_df['YearRemodAdd']
     ames_df = ames_df.drop(['YrSold', 'YearBuilt', 'YearRemodAdd'], axis = 1)
     
-    # Dropping OverallQual and OverallCond columns to enhance descriptive power of model
     X = ames_df.drop(['SalePrice','PID','Unnamed: 0', 'OverallQual', 
                          'OverallCond'], axis = 1)
     categorical = [column for column in X.columns.tolist() if (list(X.loc[:,column].unique()) == [0,1])
                   | (list(X.loc[:,column].unique()) == [1])]
     
-    # Generating feature for total house square footage
+    
     X['HouseArea'] = X.loc[:, ['GrLivArea', 'MasVnrArea', 'TotalBsmtSF', 'GarageArea',
                                'WoodDeckSF', 'OpenPorchSF','PoolArea']].sum(axis=1)
+    # Creating list of continuous numerical features to log transfmorm
+    columns = X.columns
+    continuous = [colname for colname in columns if is_numeric_dtype(X[colname]) == True]
     
-    # Applying log transformation to continuous features
-    continuous = X.loc[:, ['HouseArea','GrLivArea', 'MasVnrArea', 'BsmtFinSF1', 'BsmtUnfSF', 'TotalBsmtSF','1stFlrSF','2ndFlrSF','LowQualFinSF',
-         'GarageArea','WoodDeckSF', 'OpenPorchSF','PoolArea', 'airport_dist', 'downtown_dist', 'isu_dist',
-                          'LotArea', 'LotFrontage','HouseAge','RemodelAge']] 
-    
-    X.loc[:, ['HouseArea','GrLivArea', 'MasVnrArea', 'BsmtFinSF1', 'BsmtUnfSF', 'TotalBsmtSF','1stFlrSF',
-              '2ndFlrSF','LowQualFinSF', 'GarageArea','WoodDeckSF', 'OpenPorchSF','PoolArea', 'airport_dist', 
-              'downtown_dist', 'isu_dist', 'LotArea', 'LotFrontage','HouseAge',
-              'RemodelAge']] = continuous.apply(lambda x: np.log10(x + 2))
-
-    # Encoding ordinal values using ordinal encoder
-    ordinals = ['LandSlope','ExterQual','ExterCond','HeatingQC','KitchenQual','FireplaceQu','GarageCond','PavedDrive',
-                'LotShape', 'BsmtQual','BsmtCond','GarageQual','PoolQC','BsmtExposure','BsmtFinType1','BsmtFinType2',
-                'CentralAir','GarageFinish','Functional','Street','Fence']
+    X.loc[:, continuous] = X.loc[:, continuous].apply(lambda x: np.log10(x + 2))
     enc = OrdinalEncoder()
     X.loc[:,ordinals] = enc.fit_transform(X.loc[:,ordinals])
-
-    # Using the Pandas OneHotEncoder for binary variable creation
     X = pd.get_dummies(X)
-    
-    # Log scale transform for heteroskedasticity reduction
     y = np.log10(ames_df['SalePrice'])
     
-    return X,y
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33)
+    return X_train, X_test, y_train, y_test, X, y

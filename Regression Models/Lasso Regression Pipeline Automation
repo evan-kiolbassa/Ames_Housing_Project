@@ -1,0 +1,77 @@
+from r'C:\Users\mmotd\OneDrive\Documents\Boot Camp Files\Machine Learning Project\Data Preprocessing' import regression_preprocessing
+import numpy as np
+import pandas as pd
+from sklearn import linear_model
+import matplotlib
+import seaborn as sns
+import plotly.express as px
+import matplotlib.pyplot as plt
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LassoCV
+from sklearn import preprocessing
+from sklearn.preprocessing import RobustScaler
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import GridSearchCV
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+from sklearn.preprocessing import OrdinalEncoder
+from pandas.api.types import is_numeric_dtype
+
+X,y = regression_preprocessing()
+def pipeline_training(X,y)
+	model = linear_model.Lasso(alpha = 1e-4)
+	imputer = IterativeImputer(estimator = model)
+	imputation_pipeline = Pipeline([
+	                  ('imputer', imputer),
+	                  ('model', model)])
+	params = {'imputer__sample_posterior': [True, False],
+	          'imputer__max_iter' : [10],
+	          'imputer__initial_strategy' : ['mean', 'median', 'most common'],
+	          'imputer__imputation_order' : ['ascending', 'descending', 'roman', 'arabic', 'random']}
+	          
+
+	impute_cv = GridSearchCV(imputation_pipeline, params, cv = 3,
+	                               scoring='neg_mean_squared_error', n_jobs = -1)
+	imputation = Pipeline([
+	                  ('robust', RobustScaler()),
+	                  ('grid_cv', impute_cv)
+	 ])
+
+	imputation.fit(X,y)
+
+	print('Best Imputation Parameters:', impute_cv.best_params_)
+
+	model = linear_model.Lasso()
+	imputer = IterativeImputer(imputation_order = impute_cv.best_params_['imputer__imputation_order'],
+	                           initial_strategy = impute_cv.best_params_['imputer__initial_strategy'],
+	                           max_iter = 10, sample_posterior = impute_cv.best_params_['imputer__sample_posterior'])
+
+	imputation_pipeline = Pipeline([
+	                  ('imputer', imputer),
+	                  ('model', model)])
+	params = {}
+	params['model__alpha'] = [4e-15, 3e-12, 5e-10, 7e-8, 5e-4, 1e-4, 8e-3, 6e-2, 5e-2, 0.1]
+	params['model__selection'] = ['cyclic']
+	params['model__max_iter'] = [15000]
+	params['model__tol'] = [0.003, 0.001]
+	params['model__normalize'] = ['False']
+
+	grid_cv = GridSearchCV(imputation_pipeline, params, cv = 3,refit = 'neg_mean_squared_error',
+	                               scoring=['neg_mean_squared_error', 
+	                                        'neg_mean_absolute_error', 
+	                                        'r2'], n_jobs = -1)
+	optimized_lasso = Pipeline([
+	                  ('robust', RobustScaler()),
+	                  ('grid_cv', grid_cv)
+	 ])
+
+	optimized_lasso.fit(X,y)
+
+	grid_validation = pd.DataFrame(grid_cv.cv_results_).sort_values(ascending = True, by = 'rank_test_neg_mean_squared_error')
+	string = 'Negative Root Mean Absolute Error: {accuracy:.2f}'
+	print(string.format(accuracy = grid_validation.iloc[0,'mean_test_neg_mean_absolute_error']))
+
+	return optimized_lasso, grid_cv
+
+optimized_lasso, grid_cv = pipeline_training(X,y)
+

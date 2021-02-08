@@ -67,11 +67,26 @@ def pipeline_training(X,y)
 
 	optimized_lasso.fit(X,y)
 
+	# Sorting cross validation results
 	grid_validation = pd.DataFrame(grid_cv.cv_results_).sort_values(ascending = True, by = 'rank_test_neg_mean_squared_error')
 	string = 'Negative Root Mean Absolute Error: {accuracy:.2f}'
 	print(string.format(accuracy = grid_validation.iloc[0,'mean_test_neg_mean_absolute_error']))
+	
 
-	return optimized_lasso, grid_cv
+	# Conversion of lasso coefficients for interpretability
+	lasso_coefs = pd.DataFrame(grid_cv.best_estimator_['model'].coef_, columns = ['Lasso Coefficients'],index = X.columns)
+	optimized_lasso_coefs = lasso_coefs[abs(lasso_coefs['Lasso Coefficients']) > 0]
+	exponent_transform = optimized_lasso_coefs.copy()
+	house_area_interp = exponent_transform.loc['HouseArea',:] - 1
+	columns = pd.Series(exponent_transform.index)
+	categorical_index = columns[~columns.isin(continuous)].values
+	categorical_interp = 10**exponent_transform.loc[continuous_index,:] - 1
+	ordinal_index = columns[columns.isin(ordinals)].values
+	ordinal_interp = exponent_transform.loc[ordinal_index,:] * 100
+	continuous_index = columns[columns.isin(continuous)].values
+	continuous_interp = exponent_transform.loc[continuous_index,:].drop('HouseArea') * 100
+	# Returns the cross validation object, trained pipeline object, and converted betas for insertion into visualizations
+	return optimized_lasso, grid_cv, ordinal_interp, continuous_interp, categorical_interp, house_area_interp
 
-optimized_lasso, grid_cv = pipeline_training(X,y)
+optimized_lasso, grid_cv, ordinal_interp, continuous_interp, categorical_interp, house_area_interp = pipeline_training(X,y)
 

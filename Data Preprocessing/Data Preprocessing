@@ -36,6 +36,9 @@ def regression_preprocessing():
     
     X['HouseArea'] = X.loc[:, ['GrLivArea', 'MasVnrArea', 'TotalBsmtSF', 'GarageArea',
                                'WoodDeckSF', 'OpenPorchSF','PoolArea']].sum(axis=1)
+
+    X = X.drop(['GrLivArea', 'MasVnrArea', 'TotalBsmtSF', 'GarageArea',
+                               'WoodDeckSF', 'OpenPorchSF','PoolArea'], axis = 1)
     # Creating list of continuous numerical features to log transfmorm
     columns = X.columns
     continuous = [colname for colname in columns if is_numeric_dtype(X[colname]) == True]

@@ -28,7 +28,7 @@ def pipeline_training(X,y):
     # Sorting cross validation results
     grid_validation = pd.DataFrame(grid_cv.cv_results_).sort_values(ascending = True, by = 'rank_test_neg_mean_squared_error')
     string = 'Negative Root Mean Absolute Error: {accuracy:.2f}'
-    print(string.format(accuracy = grid_validation.best_score_))
+    print(string.format(accuracy = grid_cv.best_score_))
 
 
     # Conversion of lasso coefficients for interpretability
